@@ -1,9 +1,10 @@
 extern crate image;
 pub use image::*;
 
-#[cfg(test)] pub mod tests;
+// #[cfg(test)] pub mod tests;
 pub mod intensity;
 pub mod bit_manipulation;
+pub mod histogram;
 
 pub trait Transformation <PI: Pixel<Subpixel=u8> + 'static> {
     type PO : Pixel<Subpixel=u8> + 'static;
