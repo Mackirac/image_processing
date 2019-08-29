@@ -40,7 +40,7 @@ impl <P: Pixel<Subpixel=u8> + 'static> Transformation<P> for Median {
         let mut output = ImageBuffer::new(image.width(), image.height());
         for x in 0..image.width() {
             for y in 0..image.height() {
-                let neighborhood = neighborhood(&image, x, y, self.0, None);
+                let neighborhood = neighborhood(&image, x, y, self.0, self.0, None);
                 output.put_pixel(x, y, Median::median(neighborhood));
             }
         }
