@@ -5,6 +5,7 @@ pub use image::*;
 pub mod intensity;
 pub mod bit_manipulation;
 pub mod histogram;
+pub mod filters;
 
 pub trait Transformation <PI: Pixel<Subpixel=u8> + 'static> {
     type PO : Pixel<Subpixel=u8> + 'static;
