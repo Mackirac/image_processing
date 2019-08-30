@@ -1,6 +1,7 @@
 use crate::{ ImageBuffer, Pixel };
 
 pub mod non_linear;
+pub mod linear;
 
 pub fn neighborhood
     <'a, P>
