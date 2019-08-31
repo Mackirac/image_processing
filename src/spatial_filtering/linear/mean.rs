@@ -32,9 +32,3 @@ impl <P: Pixel<Subpixel=u8> + 'static> Transformation<P> for PonderedMean {
         Convolution(filter).transform(image)
     }
 }
-
-#[test]
-fn mean() {
-    let image = image::open("images/ckt_board_saltpep_prob_pt05.tif").unwrap().to_rgba();
-    PonderedMean.transform(image).save("images/mean_output.bmp").unwrap();
-}
