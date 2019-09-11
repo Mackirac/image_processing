@@ -17,3 +17,4 @@ fn to_dec (bin: [bool; 8]) -> u8 {
 
 mod show_bits;
 pub use show_bits::*;
+pub mod steganography;
