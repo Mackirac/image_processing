@@ -22,6 +22,7 @@ impl Cipher {
             }
             else if c != Some('0') { return Err("Invalid cipher pattern".to_string()) }
         }
+        if bits == 0 { return Err("Empty cipher pattern".to_string()) }
         Ok(Cipher { bits, filter })
     }
 
@@ -60,35 +61,36 @@ impl Cipher {
         Ok(())
     }
 
+    fn seek_character <P: Pixel<Subpixel=u8> + 'static>
+        (&self, bits: &mut Bits<P>)
+        -> u8
+    {
+        let mut character = [false; 8];
+        let mut c_bit = 0;
+        while c_bit < 8 {
+            match bits.next() {
+                None => return 3,
+                Some(b) => {
+                    if self.filter[b.px_bit] {
+                        character[c_bit] = b.value;
+                        c_bit += 1;
+                    }
+                }
+            }
+        }
+        to_dec(character)
+    }
+
     pub fn seek <P: Pixel<Subpixel=u8> + 'static>
         (&self, image: &mut ImageBuffer<P, Vec<u8>>)
         -> Result<String, String>
     {
         let mut buffer = Vec::new();
         let mut bits = Bits::new(image);
-        let mut end = false;
-        while !end {
-            let mut character = [false; 8];
-            let mut c_bit = 0;
-            while c_bit < 8 {
-                match bits.next() {
-                    None => {
-                        end = true;
-                        break;
-                    },
-                    Some(b) => {
-                        if self.filter[b.px_bit] {
-                            character[c_bit] = b.value;
-                            c_bit += 1;
-                        }
-                    }
-                }
-            }
-            if !end {
-                match to_dec(character) {
-                    3 => end = true,
-                    c => buffer.push(c)
-                }
+        loop {
+            match self.seek_character(&mut bits) {
+                3 => break,
+                c => buffer.push(c)
             }
         }
         String::from_utf8(buffer).or(Err("No valid message found".to_string()))

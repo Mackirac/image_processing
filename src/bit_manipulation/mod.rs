@@ -28,13 +28,13 @@ pub struct Bits <'a, P: Pixel<Subpixel=u8> + 'static> {
     image: &'a mut ImageBuffer<P, Vec<u8>>,
     byte: Option<[bool; 8]>,
     px_idx: usize,
-    px_bit: usize
+    px_bit: i8
 }
 
 impl <'a, P: Pixel<Subpixel=u8> + 'static> Bits<'a, P> {
     pub fn new (image: &'a mut ImageBuffer<P, Vec<u8>>) -> Bits<'a, P> {
-        let byte = image.get(0).and_then(|b| { Some(to_bin(*b)) });
-        Bits { image, byte, px_idx: 0, px_bit: 1 }
+        let byte = image.get(0).map(|b| { to_bin(*b) });
+        Bits { image, byte, px_idx: 0, px_bit: -1 }
     }
 
     pub fn set_current_byte(&mut self) {
@@ -47,7 +47,7 @@ impl <'a, P: Pixel<Subpixel=u8> + 'static> Bits<'a, P> {
 
     pub fn set_current_bit(&mut self, value: bool) {
         if let Some(byte) = self.byte.as_mut() {
-            byte[self.px_bit - 1] = value;
+            byte[self.px_bit as usize] = value;
         }
     }
 }
@@ -57,18 +57,19 @@ impl <'a, P: Pixel<Subpixel=u8> + 'static> Iterator for Bits<'a, P> {
 
     fn next (&mut self) -> Option<Self::Item> {
         if self.byte.is_none() { return None }
-        if self.px_bit == 8 {
+        if self.px_bit == 7 {
             self.set_current_byte();
-            self.px_bit = 1;
+            self.px_bit = 0;
             self.px_idx += 1;
-            self.byte = self.image.get(self.px_idx).and_then(|b| { Some(to_bin(*b)) });
-            if self.byte.is_none() { return None }
+            self.byte = self.image.get(self.px_idx).map(|b| { to_bin(*b) });
         }
         else { self.px_bit += 1 }
-        Some(Bit {
-            px_idx: self.px_idx,
-            px_bit: self.px_bit - 1,
-            value: self.byte.unwrap()[self.px_bit - 1]
+        self.byte.map(|b| {
+            Bit {
+                px_idx: self.px_idx,
+                px_bit: self.px_bit as usize,
+                value: b[self.px_bit as usize]
+            }
         })
     }
 }
