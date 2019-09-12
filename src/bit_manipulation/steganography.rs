@@ -1,62 +1,96 @@
 use crate::{ ImageBuffer, Pixel };
-use super::{ to_bin, to_dec };
+use super::{ to_bin, to_dec, Bits };
 
-pub struct Cipher;
+#[derive(Debug)]
+pub struct Cipher {
+    bits: usize,
+    filter: [bool; 8]
+}
 
 impl Cipher {
-    fn hide_character <P: Pixel<Subpixel=u8> + 'static>
-        (character: u8, image: &mut ImageBuffer<P, Vec<u8>>, pixel_counter: &mut usize)
+    pub fn new (pattern: String) -> Result<Cipher, String> {
+        if pattern.len() != 8 { return Err("Invalid cipher pattern length".to_string()) }
+
+        let mut bits = 0;
+        let mut filter = [false; 8];
+        let mut pattern = pattern.chars();
+        for i in 0..8 {
+            let c = pattern.next_back();
+            if c == Some('1') {
+                bits += 1;
+                filter[i] = true
+            }
+            else if c != Some('0') { return Err("Invalid cipher pattern".to_string()) }
+        }
+        Ok(Cipher { bits, filter })
+    }
+
+    fn hide_character <'a, P: Pixel<Subpixel=u8> + 'static>
+        (&self, character: u8, bits: &mut Bits<'a, P>)
     {
         for bit in to_bin(character).iter() {
-            if let Some(pixel) = image.get_mut(*pixel_counter) {
-                if *bit && *pixel % 2 == 0 { *pixel += 1 }
-                else if !*bit && *pixel % 2 == 1 { *pixel -= 1 }
-                *pixel_counter += 1;
-            }
-            else {
-                return;
+            loop {
+                match bits.next() {
+                    None => return, // NO MORE BITS AVAILABLE ON THE IMAGE
+                    Some(b) => {
+                        if self.filter[b.px_bit] {
+                            bits.set_current_bit(*bit);
+                            break;
+                        }
+                    }
+                }
             }
         }
+        bits.set_current_byte();
     }
-        
+
     pub fn hide <P: Pixel<Subpixel=u8> + 'static>
-        (message: String, image: &mut ImageBuffer<P, Vec<u8>>)
+        (&self, message: String, image: &mut ImageBuffer<P, Vec<u8>>)
         -> Result<(), String>
     {
         let message = message.into_bytes();
-        if message.len() * 8 > image.len() {
+        if message.len() * 8 > image.len() * self.bits {
             return Err("Image length insufficient for this message".to_string());
         }
-        let mut pixel_counter = 0;
+        let mut bits = Bits::new(image);
         for character in &message {
-            Self::hide_character(*character, image, &mut pixel_counter);
+            self.hide_character(*character, &mut bits);
         }
-        Self::hide_character(3, image, &mut pixel_counter);
+        self.hide_character(3, &mut bits);
         Ok(())
     }
 
     pub fn seek <P: Pixel<Subpixel=u8> + 'static>
-        (image: &ImageBuffer<P, Vec<u8>>)
+        (&self, image: &mut ImageBuffer<P, Vec<u8>>)
         -> Result<String, String>
     {
         let mut buffer = Vec::new();
-        let mut pixel_counter = 0;
-        loop {
+        let mut bits = Bits::new(image);
+        let mut end = false;
+        while !end {
             let mut character = [false; 8];
-            for bit in 0..8 {
-                if let Some(pixel) = image.get(pixel_counter) {
-                    character[bit] = *pixel % 2 == 1;
-                    pixel_counter += 1;
-                }
-                else {
-                    character = to_bin(3);
+            let mut c_bit = 0;
+            while c_bit < 8 {
+                match bits.next() {
+                    None => {
+                        end = true;
+                        break;
+                    },
+                    Some(b) => {
+                        if self.filter[b.px_bit] {
+                            character[c_bit] = b.value;
+                            c_bit += 1;
+                        }
+                    }
                 }
             }
-            match to_dec(character) {
-                3 => break,
-                c => buffer.push(c)
+            if !end {
+                match to_dec(character) {
+                    3 => end = true,
+                    c => buffer.push(c)
+                }
             }
         }
-        String::from_utf8(buffer).or(Err("".to_string()))
+        String::from_utf8(buffer).or(Err("No valid message found".to_string()))
     }
 }
