@@ -29,7 +29,7 @@ impl Convolution {
     fn apply_filter
         <P: Pixel<Subpixel=u8> + 'static>
         (&self, neighborhood: Vec<&P>)
-        -> P
+        -> Vec<f64>
     {
         let mut channels = vec!();
         for c in 0..P::CHANNEL_COUNT as usize {
@@ -38,9 +38,9 @@ impl Convolution {
             for p in neighborhood.iter() {
                 i += *filter.next().unwrap() as f64 * p.channels()[c] as f64
             }
-            channels.push((i / self.0.divisor() as f64).abs().round() as u8);
+            channels.push(i / self.0.divisor() as f64);
         }
-        *P::from_slice(&channels)
+        channels
     }
 }
 
@@ -48,16 +48,36 @@ impl <P: Pixel<Subpixel=u8> + 'static> Transformation<P> for Convolution {
     type PO = P;
 
     fn transform (&self, image: ImageBuffer<P, Vec<u8>>) -> ImageBuffer<Self::PO, Vec<u8>> {
-        let mut output = ImageBuffer::new(image.width(), image.height());
+        let mut buffer = vec!();
         let default = Self::PO::from_channels(0, 0, 0, 0);
-        for x in 0..image.width() {
-            for y in 0..image.height() {
+        let (mut min, mut max) = ([0_f64; 3], [255_f64; 3]);
+        for y in 0..image.height() {
+            for x in 0..image.width() {
                 let neighborhood = neighborhood(&image, x, y, self.0.dx(), self.0.dy(), Some(&default));
-                output.put_pixel(x, y, self.apply_filter(neighborhood));
+                let pixel = self.apply_filter(neighborhood);
+                for c in 0..(P::CHANNEL_COUNT as usize) {
+                    if pixel[c] < min[c] { min[c] = pixel[c] }
+                    else if pixel[c] > max[c] { max[c] = pixel[c] }
+                }
+                buffer.push(pixel);
             }
         }
-        output
+
+        let mut output : Vec<u8> = vec!();
+        for p in buffer {
+            for c in 0..(P::CHANNEL_COUNT as usize) {
+                output.push(0 + (p[c] * 255.0 / (max[c] - min[c])).floor() as u8)
+            }
+        }
+
+        ImageBuffer::from_vec(image.width(), image.height(), output).unwrap()
     }
+}
+
+#[test]
+fn borders() {
+    let image = image::open("images/100-dollars.tif").unwrap().to_luma();
+    Convolution(Filter::new(0, 0, vec!(-1), 1)).transform(image).save("images/negative.bmp").unwrap();
 }
 
 pub mod mean;
